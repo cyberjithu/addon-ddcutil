@@ -8,6 +8,10 @@ arch:
   - amd64
   - armv7
 init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:monitor-eye
+panel_title: "Monitor Control"
 privileged:
   - SYS_RAWIO
 devices:

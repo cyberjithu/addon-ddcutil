@@ -9,11 +9,16 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional
 
 import paho.mqtt.client as mqtt
+
+# Path Flask reads for current monitor state
+STATE_FILE = os.path.join(os.environ.get("ADDON_CONFIG_PATH", "/config"), "state.json")
 
 # ==============================================================================
 # Logging setup
@@ -321,8 +326,31 @@ def dump_capabilities(ddc: DDCUtil, monitor_info: dict, config: Config) -> None:
 
 
 # ==============================================================================
-# MQTT topics
+# Atomic state file writer (Flask reads this — no race conditions)
 # ==============================================================================
+
+def write_state_atomic(data: dict) -> None:
+    """
+    Write state to STATE_FILE atomically using a temp file + os.replace().
+    os.replace() is atomic on Linux — Flask always gets a complete file,
+    never a partial write.
+    """
+    path = STATE_FILE
+    dir_ = os.path.dirname(path)
+    try:
+        os.makedirs(dir_, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "w", dir=dir_, delete=False, suffix=".tmp"
+        ) as f:
+            json.dump(data, f)
+            tmp_path = f.name
+        os.replace(tmp_path, path)
+        log.debug("State file updated: %s", path)
+    except OSError as e:
+        log.warning("Could not write state file: %s", e)
+
+
+
 
 class Topics:
     def __init__(self, prefix: str):
@@ -492,9 +520,7 @@ class MonitorController:
         return self._vcp_to_alias.get(vcp_value, f"Input {vcp_value}")
 
     def _publish_state(self) -> None:
-        """Read monitor state and publish to MQTT."""
-        if not self.mqtt_client:
-            return
+        """Read monitor state, publish to MQTT and write atomic state file."""
         state = self.ddc.get_state()
         payload = {
             "brightness": state.get("brightness"),
@@ -503,13 +529,25 @@ class MonitorController:
             "input_alias": self._resolve_input_alias(state.get("input")),
             "power": state.get("power") or "OFF",
             "state": "ON" if state.get("power") == "ON" else "OFF",
+            "monitor": self.monitor_info,
+            "input_sources": [
+                {"vcp_value": s.vcp_value, "alias": s.alias}
+                for s in self.config.input_sources
+            ],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        self.mqtt_client.publish(
-            self.topics.state,
-            json.dumps(payload),
-            retain=True,
-        )
-        log.debug("Published state: %s", payload)
+
+        # Always write state file (Flask reads this)
+        write_state_atomic(payload)
+
+        # Publish to MQTT only if connected
+        if self.mqtt_client:
+            self.mqtt_client.publish(
+                self.topics.state,
+                json.dumps(payload),
+                retain=True,
+            )
+        log.debug("State updated: %s", payload)
 
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -667,6 +705,23 @@ def main() -> None:
 
     # Dump capabilities (Option 1 log + Option 2 file)
     dump_capabilities(ddc, monitor_info, config)
+
+    # Write initial state file so Flask has something to show immediately
+    write_state_atomic({
+        "brightness": None,
+        "contrast": None,
+        "input": None,
+        "input_alias": "Unknown",
+        "power": "Unknown",
+        "state": "Unknown",
+        "monitor": monitor_info,
+        "input_sources": [
+            {"vcp_value": s.vcp_value, "alias": s.alias}
+            for s in config.input_sources
+        ],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "status": "starting",
+    })
 
     # Start controller
     controller = MonitorController(config, ddc, monitor_info)

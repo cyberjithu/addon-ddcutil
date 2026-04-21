@@ -9,18 +9,20 @@ ARG BUILD_REF
 ARG BUILD_REPOSITORY
 ARG BUILD_VERSION
 
-# Install ddcutil, i2c-tools and Python dependencies
+# Install ddcutil, i2c-tools, Python and dependencies
 RUN apk add --no-cache \
     ddcutil \
     i2c-tools \
     py3-pip \
     python3 \
     && pip3 install --no-cache-dir --break-system-packages \
-    paho-mqtt==1.6.1
+    paho-mqtt==1.6.1 \
+    flask==3.0.3
 
 # Copy add-on files
 COPY run.sh /
 COPY ddcutil_mqtt.py /
+COPY web.py /
 
 RUN chmod a+x /run.sh
 

@@ -32,18 +32,33 @@ export ADDON_MQTT_DISCOVERY=$(bashio::config 'mqtt_discovery')
 export ADDON_MQTT_DISCOVERY_PREFIX=$(bashio::config 'mqtt_discovery_prefix')
 export ADDON_POLL_ENABLED=$(bashio::config 'poll_enabled')
 export ADDON_POLL_INTERVAL=$(bashio::config 'poll_interval')
-
-# Pass input_sources as JSON string
 export ADDON_INPUT_SOURCES=$(bashio::config 'input_sources')
 
 # ------------------------------------------------------------------------------
-# Resolve addon_config output directory
+# Resolve paths
 # ------------------------------------------------------------------------------
 export ADDON_CONFIG_PATH="/config"
-bashio::log.info "Capabilities will be written to: ${ADDON_CONFIG_PATH}/capabilities.txt"
+export ADDON_WEB_PORT="8099"
+
+bashio::log.info "State file: ${ADDON_CONFIG_PATH}/state.json"
+bashio::log.info "Capabilities file: ${ADDON_CONFIG_PATH}/capabilities.txt"
 
 # ------------------------------------------------------------------------------
-# Launch Python core
+# Launch Flask web UI in background
 # ------------------------------------------------------------------------------
-bashio::log.info "Launching DDC/CI Monitor Control core..."
-exec python3 /ddcutil_mqtt.py
+bashio::log.info "Starting web UI on port ${ADDON_WEB_PORT}..."
+python3 /web.py &
+WEB_PID=$!
+bashio::log.info "Web UI started (PID: ${WEB_PID})"
+
+# ------------------------------------------------------------------------------
+# Launch DDC/CI core (foreground — keeps the container alive)
+# If the core dies, kill the web UI too so the supervisor restarts everything
+# ------------------------------------------------------------------------------
+bashio::log.info "Launching DDC/CI core..."
+python3 /ddcutil_mqtt.py
+CORE_EXIT=$?
+
+bashio::log.warning "DDC/CI core exited (code: ${CORE_EXIT}). Shutting down web UI..."
+kill "${WEB_PID}" 2>/dev/null
+exit "${CORE_EXIT}"
