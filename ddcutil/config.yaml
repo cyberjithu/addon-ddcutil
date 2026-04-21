@@ -49,7 +49,7 @@ options:
 schema:
   log_level: "list(trace|debug|info|notice|warning|error|fatal)"
   extra_i2c_buses:
-    - int
+    - "int?"
   mqtt_enabled: bool
   mqtt_host: str
   mqtt_port: "int(1,65535)"
