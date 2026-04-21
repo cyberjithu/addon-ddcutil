@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Collapsible raw capabilities view
 - `/api/state` JSON endpoint for debugging
 - Atomic state file writes (`state.json`) — race-condition safe via `os.replace()`
+- Dynamic I2C device permission fixing on startup — no manual chmod needed
+- `extra_i2c_buses` config option — add custom bus numbers via the HA UI
+- Extended default device list covers i2c-0 through i2c-12 and i2c-22
+
+### Fixed
+
+- Containers no longer require manual permission fixes for I2C devices
 
 ## [1.0.0] - 2025-04-21
 

@@ -7,16 +7,39 @@
 bashio::log.info "Starting DDC/CI Monitor Control..."
 
 # ------------------------------------------------------------------------------
-# Verify I2C devices are available
+# Dynamically fix permissions on all present I2C devices
+# HA passes devices into the container but they may not be rw by default
 # ------------------------------------------------------------------------------
-if ! ls /dev/i2c-* > /dev/null 2>&1; then
-    bashio::log.fatal "No I2C devices found (/dev/i2c-* missing)!"
+bashio::log.info "Scanning for I2C devices..."
+
+FOUND_I2C=false
+for dev in /dev/i2c-*; do
+    if [ -e "$dev" ]; then
+        chmod a+rw "$dev" 2>/dev/null && \
+        bashio::log.info "I2C device enabled: ${dev}"
+        FOUND_I2C=true
+    fi
+done
+
+# Fix permissions on any extra user-defined buses
+for bus in $(bashio::config 'extra_i2c_buses'); do
+    dev="/dev/i2c-${bus}"
+    if [ -e "$dev" ]; then
+        chmod a+rw "$dev" 2>/dev/null
+        bashio::log.info "Extra I2C device enabled: ${dev}"
+        FOUND_I2C=true
+    else
+        bashio::log.warning "Extra I2C device not found: ${dev} (bus ${bus} may not exist on this system)"
+    fi
+done
+
+if [ "$FOUND_I2C" = false ]; then
+    bashio::log.fatal "No I2C devices found!"
     bashio::log.fatal "Please ensure I2C is enabled on your system."
-    bashio::log.fatal "See the documentation (DOCS.md) for instructions."
+    bashio::log.fatal "See the documentation for instructions."
+    bashio::log.fatal "If your bus number is above 12, add it to 'Extra I2C Bus Numbers' in the add-on config."
     bashio::exit.nok
 fi
-
-bashio::log.info "I2C devices found: $(ls /dev/i2c-* | tr '\n' ' ')"
 
 # ------------------------------------------------------------------------------
 # Export config as environment variables for Python
