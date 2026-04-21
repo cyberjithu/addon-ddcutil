@@ -2,6 +2,13 @@ configuration:
   log_level:
     name: Log Level
     description: Controls the verbosity of add-on logging. Set to 'debug' for troubleshooting.
+  extra_i2c_buses:
+    name: Extra I2C Bus Numbers
+    description: >-
+      Additional I2C bus numbers to enable beyond the defaults (0-12, 22).
+      Check the add-on log on first start — if your monitor is not detected,
+      look for lines like "Device /dev/i2c-X is not readable" and add that
+      bus number here. Common values on Raspberry Pi 4B are 10 and 22.
   mqtt_enabled:
     name: Enable MQTT
     description: Enable MQTT integration for Home Assistant control and state reporting.
