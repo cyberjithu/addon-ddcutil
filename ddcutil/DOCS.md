@@ -22,7 +22,18 @@ control the monitor even while you are using PC1 on HDMI1.
 
 If you are running Home Assistant OS on a Raspberry Pi, you need to enable
 I2C before the add-on can communicate with your monitor. Open the Terminal
-& SSH add-on and run:
+& SSH add-on (or connect a keyboard and screen directly to the device).
+
+> ⚠️ **Important:** The Terminal & SSH add-on opens the **HA CLI** by default,
+> not a full Linux shell. If you see a `ha>` prompt or get errors like
+> `unknown command` when running `mkdir`, you are in the HA CLI.
+> Type `login` first to drop into a real root shell before continuing.
+
+```bash
+login
+```
+
+Once you see a standard bash prompt (`#`), run:
 
 ```bash
 mkdir -p /mnt/boot/CONFIG/modules
@@ -197,19 +208,37 @@ seconds (10 minutes) or more.
 
 ## Troubleshooting
 
+**`unknown command` or `mkdir: not found` when running I2C setup commands**
+
+You are in the **HA CLI**, not a real Linux shell. The Terminal & SSH add-on
+drops you into the HA supervisor CLI by default, which only understands `ha`
+commands. Type `login` first to get a proper root shell:
+
+```bash
+login
+```
+
+You should now see a `#` prompt. Run your commands from there.
+
 **No monitor detected**
 - Confirm DDC/CI is enabled in your monitor OSD
 - Check `/dev/i2c-*` devices exist: `ls /dev/i2c-*`
 - Run `ddcutil detect --verbose` in the terminal for detailed diagnostics
 
 **I2C devices not found**
-- Follow the I2C enable steps above for your platform
-- Check kernel module: `lsmod | grep i2c`
+- Run `login` first to get a real shell (see above), then follow the I2C
+  enable steps for your platform
+- Check kernel module is loaded: `lsmod | grep i2c`
+- Expected output: `i2c_dev  20480  2` — if missing, run `modprobe i2c-dev`
 
 **MQTT entities not appearing in HA**
 - Confirm the Mosquitto add-on is running
 - Check MQTT credentials in the add-on config
 - Ensure `mqtt_discovery` is `true` and the discovery prefix matches HA settings
+
+**Web UI not appearing in sidebar**
+- Confirm `ingress: true` is present in `config.yaml`
+- Reload the HA browser tab after starting the add-on
 
 **Input source not switching**
 - Verify the VCP value in your config matches the value in `capabilities.txt`
