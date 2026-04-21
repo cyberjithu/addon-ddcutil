@@ -2,7 +2,7 @@ name: "DDC/CI Monitor Control"
 version: "1.0.0"
 slug: "ddcutil"
 description: "Control monitor brightness, contrast, input source and power via DDC/CI using ddcutil"
-url: "https://github.com/YOUR_USERNAME/addon-ddcutil"
+url: "https://github.com/cyberjithu/addon-ddcutil"
 arch:
   - aarch64
   - amd64

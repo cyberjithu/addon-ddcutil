@@ -115,7 +115,7 @@ only have access to the web UI and shell commands.
 2. Click **⋮** (top right) → **Repositories**
 3. Paste the following URL and click **Add**:
    ```
-   https://github.com/YOUR_USERNAME/addon-ddcutil
+   https://github.com/cyberjithu/addon-ddcutil
    ```
 4. Scroll down to find **DDC/CI Monitor Control** and click **Install**
 
@@ -306,7 +306,7 @@ target input has an active signal connected to it.
 
 ## Support
 
-- [Open an issue on GitHub](https://github.com/YOUR_USERNAME/addon-ddcutil/issues)
+- [Open an issue on GitHub](https://github.com/cyberjithu/addon-ddcutil/issues)
 - [Home Assistant Community Forum](https://community.home-assistant.io)
 - [Home Assistant Discord](https://discord.gg/home-assistant)
 
@@ -316,7 +316,7 @@ target input has an active signal connected to it.
 
 MIT License — see [LICENSE](LICENSE)
 
-[license-shield]: https://img.shields.io/github/license/YOUR_USERNAME/addon-ddcutil.svg
+[license-shield]: https://img.shields.io/github/license/cyberjithu/addon-ddcutil.svg
 [aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
 [armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg

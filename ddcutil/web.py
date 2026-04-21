@@ -494,7 +494,7 @@ HTML = """
 <div class="footer">
   <span>DDC/CI Monitor Control v1.1</span>
   <span>
-    <a href="https://github.com/YOUR_USERNAME/addon-ddcutil" target="_blank">
+    <a href="https://github.com/cyberjithu/addon-ddcutil" target="_blank">
       GitHub
     </a>
     &nbsp;·&nbsp;
@@ -511,8 +511,7 @@ HTML = """
     btn.textContent = open ? "Hide raw capabilities" : "Show raw capabilities";
   }
 
-  // Auto-refresh every 30 seconds
-  setTimeout(() => location.reload(), 30000);
+
 </script>
 
 </body>
