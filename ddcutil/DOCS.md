@@ -55,7 +55,7 @@ You should see one or more `/dev/i2c-N` devices.
 
 1. Add this repository to Home Assistant:
    **Settings → Add-ons → Add-on Store → ⋮ → Repositories**
-   Paste: `https://github.com/YOUR_USERNAME/addon-ddcutil`
+   Paste: `https://github.com/cyberjithu/addon-ddcutil`
 
 2. Find **DDC/CI Monitor Control** in the store and click **Install**.
 
@@ -247,5 +247,5 @@ You should now see a `#` prompt. Run your commands from there.
 
 ## Support
 
-- [GitHub Issues](https://github.com/YOUR_USERNAME/addon-ddcutil/issues)
+- [GitHub Issues](https://github.com/cyberjithu/addon-ddcutil/issues)
 - [Home Assistant Community Forum](https://community.home-assistant.io)
