@@ -1,0 +1,64 @@
+#!/usr/bin/with-contenv bashio
+
+# ==============================================================================
+# DDC/CI Monitor Control - Add-on entrypoint
+# ==============================================================================
+
+bashio::log.info "Starting DDC/CI Monitor Control..."
+
+# ------------------------------------------------------------------------------
+# Verify I2C devices are available
+# ------------------------------------------------------------------------------
+if ! ls /dev/i2c-* > /dev/null 2>&1; then
+    bashio::log.fatal "No I2C devices found (/dev/i2c-* missing)!"
+    bashio::log.fatal "Please ensure I2C is enabled on your system."
+    bashio::log.fatal "See the documentation (DOCS.md) for instructions."
+    bashio::exit.nok
+fi
+
+bashio::log.info "I2C devices found: $(ls /dev/i2c-* | tr '\n' ' ')"
+
+# ------------------------------------------------------------------------------
+# Export config as environment variables for Python
+# ------------------------------------------------------------------------------
+export ADDON_LOG_LEVEL=$(bashio::config 'log_level')
+export ADDON_MQTT_ENABLED=$(bashio::config 'mqtt_enabled')
+export ADDON_MQTT_HOST=$(bashio::config 'mqtt_host')
+export ADDON_MQTT_PORT=$(bashio::config 'mqtt_port')
+export ADDON_MQTT_USERNAME=$(bashio::config 'mqtt_username')
+export ADDON_MQTT_PASSWORD=$(bashio::config 'mqtt_password')
+export ADDON_MQTT_TOPIC_PREFIX=$(bashio::config 'mqtt_topic_prefix')
+export ADDON_MQTT_DISCOVERY=$(bashio::config 'mqtt_discovery')
+export ADDON_MQTT_DISCOVERY_PREFIX=$(bashio::config 'mqtt_discovery_prefix')
+export ADDON_POLL_ENABLED=$(bashio::config 'poll_enabled')
+export ADDON_POLL_INTERVAL=$(bashio::config 'poll_interval')
+export ADDON_INPUT_SOURCES=$(bashio::config 'input_sources')
+
+# ------------------------------------------------------------------------------
+# Resolve paths
+# ------------------------------------------------------------------------------
+export ADDON_CONFIG_PATH="/config"
+export ADDON_WEB_PORT="8099"
+
+bashio::log.info "State file: ${ADDON_CONFIG_PATH}/state.json"
+bashio::log.info "Capabilities file: ${ADDON_CONFIG_PATH}/capabilities.txt"
+
+# ------------------------------------------------------------------------------
+# Launch Flask web UI in background
+# ------------------------------------------------------------------------------
+bashio::log.info "Starting web UI on port ${ADDON_WEB_PORT}..."
+python3 /web.py &
+WEB_PID=$!
+bashio::log.info "Web UI started (PID: ${WEB_PID})"
+
+# ------------------------------------------------------------------------------
+# Launch DDC/CI core (foreground — keeps the container alive)
+# If the core dies, kill the web UI too so the supervisor restarts everything
+# ------------------------------------------------------------------------------
+bashio::log.info "Launching DDC/CI core..."
+python3 /ddcutil_mqtt.py
+CORE_EXIT=$?
+
+bashio::log.warning "DDC/CI core exited (code: ${CORE_EXIT}). Shutting down web UI..."
+kill "${WEB_PID}" 2>/dev/null
+exit "${CORE_EXIT}"
