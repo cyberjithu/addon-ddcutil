@@ -690,11 +690,16 @@ def main() -> None:
     log.info("Detecting monitor...")
     monitor_info = ddc.detect()
 
+    # if not monitor_info:
+    #     log.error("No monitor detected via DDC/CI.")
+    #     log.error("Check your cable supports DDC/CI and the monitor has it enabled.")
+    #     log.error("Try: ddcutil detect --verbose")
+    #     sys.exit(1)
     if not monitor_info:
         log.error("No monitor detected via DDC/CI.")
-        log.error("Check your cable supports DDC/CI and the monitor has it enabled.")
-        log.error("Try: ddcutil detect --verbose")
-        sys.exit(1)
+        log.warning("Keeping container alive for debugging - check logs")
+        while True:
+            time.sleep(60)
 
     log.info("Monitor detected: %s", monitor_info.get("name", "Unknown"))
 
