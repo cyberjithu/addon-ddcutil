@@ -1,4 +1,5 @@
-FROM ghcr.io/home-assistant/aarch64-base:latest
+ARG BUILD_FROM
+FROM ${BUILD_FROM}
 
 ARG BUILD_ARCH
 ARG BUILD_DATE
