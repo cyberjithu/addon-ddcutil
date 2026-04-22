@@ -13,9 +13,7 @@ ingress_port: 8099
 panel_icon: mdi:monitor-eye
 panel_title: "Monitor Control"
 device_tree: true
-privileged:
-  - SYS_RAWIO
-  - SYS_ADMIN
+full_access: true
 devices:
   - /dev/i2c-0
   - /dev/i2c-1
