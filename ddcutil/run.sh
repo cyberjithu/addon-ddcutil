@@ -15,18 +15,16 @@ bashio::log.info "Scanning for I2C devices..."
 FOUND_I2C=false
 for dev in /dev/i2c-*; do
     if [ -e "$dev" ]; then
-        chmod a+rw "$dev" 2>/dev/null && \
-        bashio::log.info "I2C device enabled: ${dev}"
+        bashio::log.info "I2C device available: ${dev}"
         FOUND_I2C=true
     fi
 done
 
-# Fix permissions on any extra user-defined buses
+# Check user-defined extra buses
 for bus in $(bashio::config 'extra_i2c_buses'); do
     dev="/dev/i2c-${bus}"
     if [ -e "$dev" ]; then
-        chmod a+rw "$dev" 2>/dev/null
-        bashio::log.info "Extra I2C device enabled: ${dev}"
+        bashio::log.info "Extra I2C device available: ${dev}"
         FOUND_I2C=true
     else
         bashio::log.warning "Extra I2C device not found: ${dev} (bus ${bus} may not exist on this system)"
