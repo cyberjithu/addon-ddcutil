@@ -1,5 +1,5 @@
 name: "DDC/CI Monitor Control"
-version: "1.0.0"
+version: "1.1.0"
 slug: "ddcutil"
 description: "Control monitor brightness, contrast, input source and power via DDC/CI using ddcutil"
 url: "https://github.com/cyberjithu/addon-ddcutil"
@@ -14,26 +14,10 @@ panel_icon: mdi:monitor-eye
 panel_title: "Monitor Control"
 device_tree: true
 full_access: true
-devices:
-  - /dev/i2c-0
-  - /dev/i2c-1
-  - /dev/i2c-2
-  - /dev/i2c-3
-  - /dev/i2c-4
-  - /dev/i2c-5
-  - /dev/i2c-6
-  - /dev/i2c-7
-  - /dev/i2c-8
-  - /dev/i2c-9
-  - /dev/i2c-10
-  - /dev/i2c-11
-  - /dev/i2c-12
-  - /dev/i2c-22
 map:
   - addon_config:rw
 options:
   log_level: "info"
-  extra_i2c_buses: []
   mqtt_enabled: false
   mqtt_host: "core-mosquitto"
   mqtt_port: 1883
@@ -47,8 +31,6 @@ options:
   input_sources: []
 schema:
   log_level: "list(trace|debug|info|notice|warning|error|fatal)"
-  extra_i2c_buses:
-    - "int?"
   mqtt_enabled: bool
   mqtt_host: str
   mqtt_port: "int(1,65535)"

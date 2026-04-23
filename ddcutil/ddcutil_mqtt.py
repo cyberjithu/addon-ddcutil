@@ -142,26 +142,63 @@ class DDCUtil:
             return False, "not_found"
 
     def detect(self) -> Optional[dict]:
-        """Detect connected monitor. Returns monitor info dict or None."""
+        """
+        Detect connected monitor by scanning all available I2C buses.
+        Dynamically finds the right bus — no hardcoded bus numbers needed.
+        Returns monitor info dict or None.
+        """
+        # First try global detect (finds monitor on any bus)
         ok, output = self._run(["detect", "--brief"])
-        if not ok or not output:
-            return None
+        if ok and output:
+            monitor = self._parse_detect_output(output)
+            if monitor:
+                return monitor
 
+        # If global detect fails, scan each bus individually
+        log.debug("Global detect failed, scanning buses individually...")
+        import glob
+        buses = sorted([
+            int(p.replace("/dev/i2c-", ""))
+            for p in glob.glob("/dev/i2c-*")
+        ])
+        log.debug("Available I2C buses: %s", buses)
+
+        for bus in buses:
+            log.debug("Trying bus %d...", bus)
+            cmd = ["ddcutil", "--bus", str(bus), "detect", "--brief"]
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    monitor = self._parse_detect_output(result.stdout)
+                    if monitor:
+                        monitor["bus"] = bus
+                        log.info("Monitor found on bus %d", bus)
+                        return monitor
+            except subprocess.TimeoutExpired:
+                log.debug("Bus %d timed out", bus)
+                continue
+
+        return None
+
+    def _parse_detect_output(self, output: str) -> Optional[dict]:
+        """Parse ddcutil detect output into a monitor info dict."""
         monitor = {}
         for line in output.splitlines():
             line = line.strip()
-            if line.startswith("Display"):
-                try:
-                    monitor["bus"] = int(re.search(r"I2C bus:\s+/dev/i2c-(\d+)", output).group(1))
-                except (AttributeError, ValueError):
-                    pass
+            try:
+                bus_match = re.search(r"I2C bus:\s+/dev/i2c-(\d+)", output)
+                if bus_match:
+                    monitor["bus"] = int(bus_match.group(1))
+            except (AttributeError, ValueError):
+                pass
             if "Monitor:" in line:
                 monitor["name"] = line.split("Monitor:")[-1].strip()
             if "Model:" in line:
                 monitor["model"] = line.split("Model:")[-1].strip()
             if "Manufacturer:" in line:
                 monitor["manufacturer"] = line.split("Manufacturer:")[-1].strip()
-
         return monitor if monitor else None
 
     def get_capabilities(self) -> str:
@@ -181,15 +218,34 @@ class DDCUtil:
         return None
 
     def set_vcp(self, feature: int, value: int) -> bool:
-        """Set a VCP feature value."""
-        ok, _ = self._run(["setvcp", hex(feature), str(value)])
+        """Set a VCP feature value.
+        Uses --noverify to skip readback verification — required for monitors
+        like Samsung Neo G9 that accept commands but return invalid responses
+        during the verification step (DDCRC_VERIFY error).
+        """
+        ok, _ = self._run(["setvcp", hex(feature), str(value), "--noverify"])
         return ok
+
+    def is_brightness_locked(self) -> bool:
+        """
+        Check if brightness control is locked by monitor features.
+        On Samsung monitors, Eye Saver, HDR, Dynamic Contrast and Eco Saving
+        modes lock brightness — VCP 0x10 becomes unreadable when any are active.
+        """
+        return self.get_brightness() is None
 
     def get_brightness(self) -> Optional[int]:
         return self.get_vcp(self.VCP_BRIGHTNESS)
 
     def set_brightness(self, value: int) -> bool:
         value = max(0, min(100, value))
+        if self.is_brightness_locked():
+            log.warning(
+                "Brightness control is locked by monitor. "
+                "Disable Eye Saver, HDR, Dynamic Contrast and "
+                "Eco Saving modes in your monitor OSD settings."
+            )
+            return False
         return self.set_vcp(self.VCP_BRIGHTNESS, value)
 
     def get_contrast(self) -> Optional[int]:
@@ -217,8 +273,10 @@ class DDCUtil:
 
     def get_state(self) -> dict:
         """Read all controllable values in one pass."""
+        brightness = self.get_brightness()
         return {
-            "brightness": self.get_brightness(),
+            "brightness": brightness,
+            "brightness_locked": brightness is None,
             "contrast": self.get_contrast(),
             "input": self.get_input(),
             "power": self.get_power(),
@@ -524,6 +582,7 @@ class MonitorController:
         state = self.ddc.get_state()
         payload = {
             "brightness": state.get("brightness"),
+            "brightness_locked": state.get("brightness_locked", False),
             "contrast": state.get("contrast"),
             "input": state.get("input"),
             "input_alias": self._resolve_input_alias(state.get("input")),
@@ -690,16 +749,11 @@ def main() -> None:
     log.info("Detecting monitor...")
     monitor_info = ddc.detect()
 
-    # if not monitor_info:
-    #     log.error("No monitor detected via DDC/CI.")
-    #     log.error("Check your cable supports DDC/CI and the monitor has it enabled.")
-    #     log.error("Try: ddcutil detect --verbose")
-    #     sys.exit(1)
     if not monitor_info:
         log.error("No monitor detected via DDC/CI.")
-        log.warning("Keeping container alive for debugging - check logs")
-        while True:
-            time.sleep(60)
+        log.error("Check your cable supports DDC/CI and the monitor has it enabled.")
+        log.error("Try: ddcutil detect --verbose")
+        sys.exit(1)
 
     log.info("Monitor detected: %s", monitor_info.get("name", "Unknown"))
 

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-04-21
+## [1.1.0] - 2025-04-23
 
 ### Added
 
@@ -16,13 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Collapsible raw capabilities view
 - `/api/state` JSON endpoint for debugging
 - Atomic state file writes (`state.json`) — race-condition safe via `os.replace()`
-- Dynamic I2C device permission fixing on startup — no manual chmod needed
-- `extra_i2c_buses` config option — add custom bus numbers via the HA UI
-- Extended default device list covers i2c-0 through i2c-12 and i2c-22
+- Dynamic I2C bus detection — automatically scans all buses, no hardcoded list
+- `full_access: true` — works on any hardware without device list configuration
+- `--noverify` flag on all setvcp commands — fixes DDCRC_VERIFY errors on Samsung monitors
+- Brightness lock detection — warns when Eye Saver/HDR/Dynamic Contrast blocks brightness
+- `device_tree: true` for proper hardware device access
 
 ### Fixed
 
-- Containers no longer require manual permission fixes for I2C devices
+- Raspberry Pi 4B DDC/CI detection via `vc4-kms-v3d` driver and `i2c2_iknowwhatimdoing`
+- EPERM errors on i2c devices resolved by `full_access: true`
+- Samsung Neo G9 DDCRC_VERIFY errors handled automatically with `--noverify`
+- Dynamic bus detection handles any bus number (no more hardcoded i2c-10/i2c-22)
+
+### Changed
+
+- Removed hardcoded `devices:` list — `full_access: true` covers all hardware
+- Removed `extra_i2c_buses` config option — no longer needed
+- Switched from `vc4-fkms-v3d` to `vc4-kms-v3d` recommendation for RPi4
 
 ## [1.0.0] - 2025-04-21
 

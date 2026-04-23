@@ -10,8 +10,8 @@ from Home Assistant using DDC/CI — no physical buttons needed.
 
 DDC/CI communicates over a separate I2C channel built into your video cable,
 completely independent of which input is active on screen. This means your
-Raspberry Pi (connected on HDMI2, for example) can control the monitor even
-while you are using another PC on HDMI1.
+Raspberry Pi (connected on HDMI, for example) can control the monitor even
+while you are using another PC on a different input.
 
 ---
 
@@ -21,8 +21,10 @@ while you are using another PC on HDMI1.
 - MQTT integration with Home Assistant auto-discovery
 - User-defined input source aliases (e.g. "Gaming PC", "Laptop")
 - Ingress web UI in the HA sidebar — monitor info, state gauges, input map
+- **Dynamic I2C bus detection** — automatically finds monitor on any bus
 - Automatic capabilities dump to log and file on startup
 - Event-driven architecture — no aggressive I2C polling by default
+- Brightness lock detection — warns when Eye Saver/HDR blocks brightness
 - Multi-architecture: amd64, aarch64, armv7
 
 ---
@@ -64,9 +66,7 @@ Once you see a standard bash prompt (`#`), run:
 
 ```bash
 mkdir -p /mnt/boot/CONFIG/modules
-echo i2c-dev > /mnt/boot/CONFIG/modules/rpi-i2c.conf
-echo dtparam=i2c_vc=on >> /mnt/boot/config.txt
-echo dtparam=i2c_arm=on >> /mnt/boot/config.txt
+echo "i2c-dev" > /mnt/boot/CONFIG/modules/rpi-i2c.conf
 sync && reboot
 ```
 
@@ -77,12 +77,36 @@ ls /dev/i2c-*
 # Expected output: /dev/i2c-0  /dev/i2c-1  (one or more devices)
 ```
 
-If nothing appears, check the kernel modules are loaded:
+#### Raspberry Pi 4B — Additional DDC/CI fix
+
+The RPi 4B requires two extra config.txt parameters to expose the HDMI DDC/CI
+channel to userspace. Without these, `ddcutil detect` returns "No displays
+found" even when the monitor is connected and DDC/CI is enabled.
+
+After `login` on the real host shell:
 
 ```bash
-lsmod | grep i2c
-# Expected: i2c_dev  20480  2
+# Switch to KMS driver (required for DDC/CI on RPi4)
+sed -i 's/dtoverlay=vc4-fkms-v3d/dtoverlay=vc4-kms-v3d/' /mnt/boot/config.txt
+
+# Unlock HDMI I2C bus for userspace access
+echo "dtparam=i2c2_iknowwhatimdoing" >> /mnt/boot/config.txt
+
+# Verify changes
+grep -i "vc4\|i2c2" /mnt/boot/config.txt
+
+sync && reboot
 ```
+
+> ℹ️ The `i2c2_iknowwhatimdoing` parameter name is intentional — it's the
+> official RPi parameter that releases the HDMI I2C bus from exclusive GPU
+> control and grants userspace access.
+
+After reboot, the add-on should detect your monitor automatically.
+
+**Which HDMI port to use on RPi 4B:**
+The port **closest to the USB-C power connector** (HDMI0) works most
+reliably for DDC/CI. Connect your monitor cable there.
 
 #### x86-64 (generic PC running Home Assistant OS)
 
@@ -92,13 +116,23 @@ I2C is usually available by default. Verify with:
 ls /dev/i2c-*
 ```
 
-If no devices appear, load the module:
+### 4. Monitor OSD settings
 
-```bash
-modprobe i2c-dev
-```
+Certain monitor features **lock brightness control** and prevent DDC/CI
+brightness commands from taking effect. Before using the add-on, disable
+the following in your monitor's OSD:
 
-### 4. MQTT broker (optional but recommended)
+- **Eye Saver Mode** / Eye Care
+- **HDR** / HDR Mode
+- **Dynamic Contrast** / Smart Contrast
+- **Eco Saving** / Eco Mode
+- **Auto Brightness**
+
+> ⚠️ **Samsung monitors:** These features completely hide the brightness VCP
+> feature from DDC/CI when enabled. The add-on will warn in the log if
+> brightness control is locked.
+
+### 5. MQTT broker (optional but recommended)
 
 For full Home Assistant integration, install the
 [Mosquitto add-on](https://github.com/home-assistant/addons/tree/master/mosquitto)
@@ -139,9 +173,10 @@ monitor and prints all available input sources:
 
 ```
 ============================================================
-Monitor detected: Dell U2722D
+Monitor detected: Samsung Neo G9
 ------------------------------------------------------------
 Available input sources (use these in your config):
+  VCP Value: 1     → VGA-1
   VCP Value: 17    → HDMI-1
   VCP Value: 18    → HDMI-2
   VCP Value: 15    → DisplayPort-1
@@ -154,6 +189,11 @@ SSH:
 ```
 /addon_configs/<repo_hash>_ddcutil/capabilities.txt
 ```
+
+> ℹ️ Note: Some monitors (including Samsung Neo G9) report `Maximum retries
+> exceeded` for capabilities. This is a known firmware quirk — individual VCP
+> commands still work correctly. Use `ddcutil getvcp 60` to find your input
+> source values manually if needed.
 
 ### Step 4 — Map your input sources
 
@@ -205,14 +245,11 @@ Assistant sidebar. Click it to open the ingress dashboard.
 The dashboard shows:
 
 - **Monitor info** — name, manufacturer, model and I2C bus
-- **Current state** — brightness and contrast gauges, active input, power
-  status
-- **Input source map** — all configured aliases with the currently active one
-  highlighted
+- **Current state** — brightness and contrast gauges, active input, power status
+- **Input source map** — all configured aliases with the currently active one highlighted
 - **Full capabilities** — raw DDC/CI capabilities string (expandable)
 
-The dashboard auto-refreshes every 30 seconds. A `/api/state` JSON endpoint
-is also available for debugging.
+A `/api/state` JSON endpoint is also available for debugging.
 
 ---
 
@@ -269,28 +306,80 @@ automation:
 
 ## Troubleshooting
 
-**No I2C devices found (`/dev/i2c-*` missing)**
-Re-run the I2C enable steps above. Check `lsmod | grep i2c` — you should see
-`i2c_dev` in the output.
+**`unknown command` or `mkdir: not found` when running I2C setup commands**
 
-**No monitor detected**
-Confirm DDC/CI is enabled in your monitor OSD. Run `ddcutil detect --verbose`
-in the terminal for detailed diagnostics. Check your cable supports DDC/CI
-(HDMI and DisplayPort do, VGA does not).
+You are in the **HA CLI**, not a real Linux shell. The Terminal & SSH add-on
+drops you into the HA supervisor CLI by default, which only understands `ha`
+commands. Type `login` first to get a proper root shell:
+
+```bash
+login
+```
+
+You should now see a `#` prompt. Run your commands from there.
+
+**No monitor detected on Raspberry Pi 4B**
+
+This is the most common issue on RPi4. The vc4 GPU driver holds exclusive
+control of the HDMI I2C bus by default. Apply the fix:
+
+```bash
+# After login on real host
+sed -i 's/dtoverlay=vc4-fkms-v3d/dtoverlay=vc4-kms-v3d/' /mnt/boot/config.txt
+echo "dtparam=i2c2_iknowwhatimdoing" >> /mnt/boot/config.txt
+sync && reboot
+```
+
+Also make sure to use **HDMI0** (the port closest to the USB-C power connector)
+— this port has the most reliable DDC/CI support on RPi4.
+
+**No I2C devices found (`/dev/i2c-*` missing)**
+
+Re-run the I2C enable steps. Check kernel module is loaded:
+
+```bash
+lsmod | grep i2c
+# Expected: i2c_dev  20480  2
+```
+
+**Brightness not changing**
+
+Check your monitor OSD and disable: Eye Saver, HDR, Dynamic Contrast, Eco
+Saving. These lock the brightness VCP feature. The add-on will log a warning
+if brightness is locked.
+
+**`DDCRC_VERIFY` errors in log**
+
+This is a known Samsung firmware quirk — the monitor accepts and applies the
+command but returns an invalid response during verification. The add-on uses
+`--noverify` to handle this automatically. Commands still work correctly.
 
 **Web UI not appearing in sidebar**
+
 Confirm `ingress: true` is present in `config.yaml`. Reload the HA browser
 tab after starting the add-on.
 
 **MQTT entities not appearing in Home Assistant**
+
 Check the Mosquitto add-on is running. Verify your MQTT credentials. Make
 sure `mqtt_discovery` is `true` and the discovery prefix matches your HA
 MQTT integration settings (default is `homeassistant`).
 
 **Input source not switching**
+
 Verify the VCP value in your config matches the value shown in
 `capabilities.txt`. Some monitors only accept input switch commands when the
-target input has an active signal connected to it.
+target input has an active signal connected to it. Use `--noverify` flag
+(handled automatically by the add-on).
+
+**Samsung Neo G9 specific notes**
+
+- Connect via **HDMI** not DisplayPort — DDC/CI only works over HDMI on this monitor
+- Use **HDMI0** on RPi4 (closest to USB-C power)
+- Disable Eye Saver, HDR, Dynamic Contrast in OSD for brightness control
+- Capabilities command returns "Maximum retries exceeded" — this is normal,
+  individual VCP commands work correctly
+- `DDCRC_VERIFY` errors are expected and handled automatically
 
 ---
 
@@ -298,7 +387,7 @@ target input has an active signal connected to it.
 
 | Version | Planned features |
 |---|---|
-| v1.1 | ✅ Ingress web UI (read-only dashboard) |
+| v1.1 | ✅ Ingress web UI, dynamic bus detection, --noverify support, brightness lock detection |
 | v1.2 | Interactive web UI — set brightness and switch input from the dashboard |
 | v2.0 | Multi-monitor support |
 

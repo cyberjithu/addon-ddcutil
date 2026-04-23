@@ -7,35 +7,24 @@
 bashio::log.info "Starting DDC/CI Monitor Control..."
 
 # ------------------------------------------------------------------------------
-# Dynamically fix permissions on all present I2C devices
-# HA passes devices into the container but they may not be rw by default
+# Dynamically scan all I2C devices
+# full_access: true gives us all host devices automatically
+# No need for a hardcoded devices list
 # ------------------------------------------------------------------------------
 bashio::log.info "Scanning for I2C devices..."
 
 FOUND_I2C=false
 for dev in /dev/i2c-*; do
     if [ -e "$dev" ]; then
-        bashio::log.info "I2C device available: ${dev}"
+        bashio::log.info "I2C device found: ${dev}"
         FOUND_I2C=true
-    fi
-done
-
-# Check user-defined extra buses
-for bus in $(bashio::config 'extra_i2c_buses'); do
-    dev="/dev/i2c-${bus}"
-    if [ -e "$dev" ]; then
-        bashio::log.info "Extra I2C device available: ${dev}"
-        FOUND_I2C=true
-    else
-        bashio::log.warning "Extra I2C device not found: ${dev} (bus ${bus} may not exist on this system)"
     fi
 done
 
 if [ "$FOUND_I2C" = false ]; then
     bashio::log.fatal "No I2C devices found!"
     bashio::log.fatal "Please ensure I2C is enabled on your system."
-    bashio::log.fatal "See the documentation for instructions."
-    bashio::log.fatal "If your bus number is above 12, add it to 'Extra I2C Bus Numbers' in the add-on config."
+    bashio::log.fatal "For Raspberry Pi on HAOS, see the documentation."
     bashio::exit.nok
 fi
 
