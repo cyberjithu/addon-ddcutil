@@ -147,39 +147,67 @@ class DDCUtil:
         Dynamically finds the right bus — no hardcoded bus numbers needed.
         Returns monitor info dict or None.
         """
+        log.debug("Starting monitor detection...")
+
         # First try global detect (finds monitor on any bus)
+        log.debug("Attempting global ddcutil detect...")
         ok, output = self._run(["detect", "--brief"])
         if ok and output:
+            log.debug("Global detect output: %s", output[:200])
             monitor = self._parse_detect_output(output)
             if monitor:
+                log.info("Monitor found via global detect: %s", monitor)
                 return monitor
+            log.debug("Global detect succeeded but no monitor parsed from output")
+        else:
+            log.debug("Global detect failed or returned empty output")
 
         # If global detect fails, scan each bus individually
-        log.debug("Global detect failed, scanning buses individually...")
+        log.info("Scanning I2C buses individually...")
         import glob
         buses = sorted([
             int(p.replace("/dev/i2c-", ""))
             for p in glob.glob("/dev/i2c-*")
         ])
-        log.debug("Available I2C buses: %s", buses)
+        log.info("Available I2C buses to scan: %s", buses)
 
         for bus in buses:
-            log.debug("Trying bus %d...", bus)
+            log.info("Trying bus %d (/dev/i2c-%d)...", bus, bus)
             cmd = ["ddcutil", "--bus", str(bus), "detect", "--brief"]
             try:
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=5
                 )
+                log.debug(
+                    "Bus %d result: returncode=%d stdout=%s stderr=%s",
+                    bus,
+                    result.returncode,
+                    result.stdout.strip()[:100],
+                    result.stderr.strip()[:100],
+                )
                 if result.returncode == 0 and result.stdout.strip():
                     monitor = self._parse_detect_output(result.stdout)
                     if monitor:
                         monitor["bus"] = bus
-                        log.info("Monitor found on bus %d", bus)
+                        log.info("Monitor found on bus %d: %s", bus, monitor)
                         return monitor
+                    else:
+                        log.debug("Bus %d returned output but no monitor parsed", bus)
+                else:
+                    log.info(
+                        "Bus %d: no monitor (rc=%d) — %s",
+                        bus,
+                        result.returncode,
+                        result.stderr.strip()[:80] or "no error output",
+                    )
             except subprocess.TimeoutExpired:
-                log.debug("Bus %d timed out", bus)
+                log.warning("Bus %d timed out after 5s — skipping", bus)
+                continue
+            except Exception as e:
+                log.warning("Bus %d unexpected error: %s", bus, e)
                 continue
 
+        log.error("No monitor found on any bus: %s", buses)
         return None
 
     def _parse_detect_output(self, output: str) -> Optional[dict]:
@@ -753,7 +781,23 @@ def main() -> None:
         log.error("No monitor detected via DDC/CI.")
         log.error("Check your cable supports DDC/CI and the monitor has it enabled.")
         log.error("Try: ddcutil detect --verbose")
-        sys.exit(1)
+        log.warning("Retrying detection every 30 seconds...")
+        retry_count = 0
+        while True:
+            time.sleep(30)
+            retry_count += 1
+            log.info("Retry #%d — scanning for monitor...", retry_count)
+            monitor_info = ddc.detect()
+            if monitor_info:
+                log.info("Monitor detected on retry #%d: %s", retry_count, monitor_info.get("name", "Unknown"))
+                break
+            log.warning(
+                "Retry #%d failed. Still no monitor detected. "
+                "Check: 1) Cable connected to HDMI0 (closest to USB-C power) "
+                "2) DDC/CI enabled in monitor OSD "
+                "3) Monitor is powered on",
+                retry_count,
+            )
 
     log.info("Monitor detected: %s", monitor_info.get("name", "Unknown"))
 
