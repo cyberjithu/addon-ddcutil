@@ -162,7 +162,7 @@ class DDCUtil:
         else:
             log.debug("Global detect failed or returned empty output")
 
-        # If global detect fails, scan each bus individually
+        # If global detect fails, scan each bus individually using getvcp
         log.info("Scanning I2C buses individually...")
         import glob
         buses = sorted([
@@ -173,7 +173,8 @@ class DDCUtil:
 
         for bus in buses:
             log.info("Trying bus %d (/dev/i2c-%d)...", bus, bus)
-            cmd = ["ddcutil", "--bus", str(bus), "detect", "--brief"]
+            # Use getvcp 0x10 as a probe — if it responds, a monitor is there
+            cmd = ["ddcutil", "--bus", str(bus), "getvcp", "0x10", "--noverify"]
             try:
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=5
@@ -185,20 +186,27 @@ class DDCUtil:
                     result.stdout.strip()[:100],
                     result.stderr.strip()[:100],
                 )
-                if result.returncode == 0 and result.stdout.strip():
-                    monitor = self._parse_detect_output(result.stdout)
-                    if monitor:
-                        monitor["bus"] = bus
-                        log.info("Monitor found on bus %d: %s", bus, monitor)
-                        return monitor
-                    else:
-                        log.debug("Bus %d returned output but no monitor parsed", bus)
+                if result.returncode == 0:
+                    log.info("Monitor responding on bus %d — running full detect", bus)
+                    # Run full detect to get monitor info
+                    detect_result = subprocess.run(
+                        ["ddcutil", "--bus", str(bus), "detect"],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    monitor = self._parse_detect_output(
+                        detect_result.stdout or result.stdout
+                    )
+                    if not monitor:
+                        monitor = {}
+                    monitor["bus"] = bus
+                    log.info("Monitor found on bus %d: %s", bus, monitor)
+                    return monitor
                 else:
                     log.info(
                         "Bus %d: no monitor (rc=%d) — %s",
                         bus,
                         result.returncode,
-                        result.stderr.strip()[:80] or "no error output",
+                        result.stderr.strip()[:80] or "no response",
                     )
             except subprocess.TimeoutExpired:
                 log.warning("Bus %d timed out after 5s — skipping", bus)
@@ -806,24 +814,51 @@ def main() -> None:
         ddc.bus = monitor_info["bus"]
         ddc._bus_flag = ["--bus", str(monitor_info["bus"])]
 
+    # Parse a friendly name from the raw EDID string if name looks like SAM:LS49AG95:HNTR600022
+    raw_name = monitor_info.get("name", "")
+    if ":" in raw_name and not monitor_info.get("model"):
+        parts = raw_name.split(":")
+        if len(parts) >= 2:
+            monitor_info["manufacturer"] = parts[0]
+            monitor_info["model"] = parts[1]
+            monitor_info["name"] = f"{parts[0]} {parts[1]}"
+
+    log.info("Monitor: %s (bus /dev/i2c-%s)", monitor_info.get("name"), monitor_info.get("bus"))
+
     # Dump capabilities (Option 1 log + Option 2 file)
     dump_capabilities(ddc, monitor_info, config)
 
-    # Write initial state file so Flask has something to show immediately
+    # Read actual current state values before writing state file
+    log.info("Reading current monitor state...")
+    brightness = ddc.get_brightness()
+    contrast = ddc.get_contrast()
+    current_input = ddc.get_input()
+    power = ddc.get_power()
+
+    # Resolve input alias
+    vcp_to_alias = {s.vcp_value: s.alias for s in config.input_sources}
+    input_alias = vcp_to_alias.get(current_input, f"Input {current_input}") if current_input else "Unknown"
+
+    log.info(
+        "Current state — brightness: %s, contrast: %s, input: %s (%s), power: %s",
+        brightness, contrast, current_input, input_alias, power
+    )
+
+    # Write initial state file with real values
     write_state_atomic({
-        "brightness": None,
-        "contrast": None,
-        "input": None,
-        "input_alias": "Unknown",
-        "power": "Unknown",
-        "state": "Unknown",
+        "brightness": brightness,
+        "contrast": contrast,
+        "input": current_input,
+        "input_alias": input_alias,
+        "power": power or "Unknown",
+        "state": "ON" if power == "ON" else "OFF",
         "monitor": monitor_info,
         "input_sources": [
             {"vcp_value": s.vcp_value, "alias": s.alias}
             for s in config.input_sources
         ],
         "updated_at": datetime.now(timezone.utc).isoformat(),
-        "status": "starting",
+        "status": "online",
     })
 
     # Start controller
