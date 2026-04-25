@@ -1,7 +1,7 @@
 # ==============================================================================
 # DDC/CI Monitor Control — Multi-stage Dockerfile
 #
-# Stage 1 (builder): Installs ddcutil from Alpine edge + Python packages.
+# Stage 1 (builder): Installs ddcutil + Python packages into isolated layers.
 #                    This stage is discarded — nothing leaks to the final image
 #                    except what we explicitly COPY.
 #
@@ -14,10 +14,11 @@ ARG BUILD_FROM=ghcr.io/home-assistant/aarch64-base:latest
 # ── Stage 1: Builder ──────────────────────────────────────────────────────────
 FROM ${BUILD_FROM} AS builder
 
-# ddcutil 2.2.6+ lives in Alpine edge community.
-# It fixes EPERM on /dev/i2c devices that plagued older versions on RPi4
-# with the vc4-kms-v3d driver.
+# ddcutil 2.2.6+ from Alpine edge — requires /sys/bus/i2c sysfs access.
+# kernel_modules: true in config.yaml provides this inside the container.
+# Older stable versions (2.2.3) have READ_ALL_ZERO bugs on Samsung monitors.
 RUN apk add --no-cache \
+    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     ddcutil \
     py3-pip \
     python3
