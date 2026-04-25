@@ -24,10 +24,10 @@ RUN apk add --no-cache \
         py3-pip \
         python3
 
-# Install Python packages into an isolated prefix.
-# PYTHONPATH is set in the runtime stage to pick them up without needing pip.
+# Install Python packages into /usr/local so they land on Python's
+# default sys.path in the runtime stage without any PYTHONPATH tricks.
 RUN pip3 install --no-cache-dir \
-    --prefix=/python-packages \
+    --target=/python-packages \
     paho-mqtt==1.6.1 \
     flask==3.0.3
 
@@ -62,8 +62,11 @@ RUN apk add --no-cache \
 COPY --from=builder /usr/bin/ddcutil        /usr/bin/ddcutil
 COPY --from=builder /usr/lib/libddcutil.so* /usr/lib/
 
-# Copy pre-installed Python packages from builder stage
-COPY --from=builder /python-packages        /usr/local
+# Copy pre-installed Python packages from builder.
+# --target puts packages flat in /python-packages, so we copy there
+# and set PYTHONPATH so Python finds them at runtime.
+COPY --from=builder /python-packages /python-packages
+ENV PYTHONPATH=/python-packages
 
 # Add-on source files
 COPY run.sh          /
