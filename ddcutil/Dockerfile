@@ -48,25 +48,33 @@ ARG BUILD_VERSION
 #   jansson       → libjansson.so.4   (ddcutil dep)
 #   libudev-zero  → libudev.so.1      (ddcutil dep)
 #   libusb        → libusb-1.0.so.0   (ddcutil dep)
+#   libx11        → libX11.so.6       (ddcutil 2.2.6+ dep)
+#   libxext       → libXext.so.6      (ddcutil 2.2.6+ dep)
+#   libxrandr     → libXrandr.so.2    (ddcutil 2.2.6+ dep)
+#   libdrm        → libdrm.so.2       (ddcutil 2.2.6+ dep)
 #   i2c-tools     → i2cdetect for diagnostics
-#   python3       → runtime only, no pip
+#   python3 + py3-pip → install packages then remove pip after
 RUN apk add --no-cache \
     glib \
     jansson \
     libudev-zero \
     libusb \
+    libx11 \
+    libxext \
+    libxrandr \
+    libdrm \
     i2c-tools \
-    python3
+    python3 \
+    py3-pip \
+    && pip3 install --no-cache-dir --break-system-packages \
+        paho-mqtt==1.6.1 \
+        flask==3.0.3 \
+    && apk del py3-pip \
+    && rm -rf /root/.cache
 
 # Copy ddcutil binary and its shared library from builder stage
 COPY --from=builder /usr/bin/ddcutil        /usr/bin/ddcutil
 COPY --from=builder /usr/lib/libddcutil.so* /usr/lib/
-
-# Copy pre-installed Python packages from builder.
-# --target puts packages flat in /python-packages, so we copy there
-# and set PYTHONPATH so Python finds them at runtime.
-COPY --from=builder /python-packages /python-packages
-ENV PYTHONPATH=/python-packages
 
 # Add-on source files
 COPY run.sh          /
