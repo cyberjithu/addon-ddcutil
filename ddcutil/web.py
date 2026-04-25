@@ -403,7 +403,12 @@ HTML = """
 
       <div class="gauge">
         <div class="gauge-label">Brightness</div>
-        {% if brightness is not none %}
+        {% if brightness_locked %}
+          <div class="gauge-value unknown">Locked</div>
+          <div style="font-size:11px;color:var(--yellow);margin-top:6px;">
+            ⚠️ Disable Eye Saver / HDR in OSD
+          </div>
+        {% elif brightness is not none %}
           <div class="gauge-value">{{ brightness }}%</div>
           <div class="gauge-bar">
             <div class="gauge-bar-fill" style="width:{{ brightness }}%"></div>
@@ -537,6 +542,7 @@ def index():
         status=status,
         monitor=state.get("monitor", {}),
         brightness=state.get("brightness"),
+        brightness_locked=state.get("brightness_locked", False),
         contrast=state.get("contrast"),
         input_alias=state.get("input_alias", "Unknown"),
         current_input=state.get("input"),
