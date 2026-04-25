@@ -18,11 +18,9 @@ FROM ${BUILD_FROM} AS builder
 # It fixes EPERM on /dev/i2c devices that plagued older versions on RPi4
 # with the vc4-kms-v3d driver.
 RUN apk add --no-cache \
-    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     ddcutil \
-    && apk add --no-cache \
-        py3-pip \
-        python3
+    py3-pip \
+    python3
 
 # Install Python packages into /usr/local so they land on Python's
 # default sys.path in the runtime stage without any PYTHONPATH tricks.
