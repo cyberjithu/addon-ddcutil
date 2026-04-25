@@ -14,6 +14,7 @@ panel_icon: mdi:monitor-eye
 panel_title: "Monitor Control"
 device_tree: true
 full_access: true
+kernel_modules: true
 map:
   - addon_config:rw
 options:
